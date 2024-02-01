@@ -196,44 +196,39 @@ endDate = st.sidebar.date_input(label='End Date: ',
             disabled=st.session_state.customRange)
 
 sport_england_table = run_aderant_query(sport_england_query)
-sport_england_table['Copy - Transaction Date'] = sport_england_table['Transaction Date']
-sport_england_table.set_index('Copy - Transaction Date', inplace=True)
+# sport_england_table['Copy - Transaction Date'] = sport_england_table['Transaction Date']
+sport_england_table.set_index('Transaction Date', inplace=True)
 sport_england_table = sport_england_table.sort_index().loc[st.session_state.start_date:st.session_state.end_date]
+sport_england_table.reset_index(inplace=True)
 
 #sport_england_table_total = sport_england_table.copy()
 
 #sport_england_table_total.loc['Total']= sport_england_table.sum(numeric_only=True)
 
-sport_england_table['ToBill Hours'].fillna("0.00", inplace=True)
-sport_england_table['ToBill Amount'].fillna("0.00", inplace=True)
+sport_england_table['ToBill Hours'].fillna(0.0, inplace=True)
+sport_england_table['ToBill Amount'].fillna(0.0, inplace=True)
 sport_england_table['Narrative'].fillna("", inplace=True)
 
 c = st.container()
 
-tab1, tab2 = st.tabs(["Weekly Reports", "Monthly Reports"])
-
 with c:
     st.image(Image.open('muckle_logo.png'), use_column_width=False, width=200)
 
-with tab1:
-
-    st.header('All Sport England WIP Below')
-
-    select_all_matters = st.checkbox("Select All Matters")
+    select_all_matters = st.sidebar.checkbox("Select All Matters")
 
     #sport_england_table["ToBill Amount"] = sport_england_table["ToBill Amount"].apply(lambda x: "{:.2f}".format((float(x))))
 
     if select_all_matters:
-        matter_filter = st.multiselect("Select a Matter", sport_england_table.sort_values(by="Matter_Name").Matter_Name.unique(), sport_england_table.sort_values(by="Matter_Name").Matter_Name.unique())
+        matter_filter = st.sidebar.multiselect("Select a Matter", sport_england_table.sort_values(by="Matter_Name").Matter_Name.unique(), sport_england_table.sort_values(by="Matter_Name").Matter_Name.unique())
     else:
-        matter_filter = st.multiselect("Select a Matter", sport_england_table.sort_values(by="Matter_Name").Matter_Name.unique())    
+        matter_filter = st.sidebar.multiselect("Select a Matter", sport_england_table.sort_values(by="Matter_Name").Matter_Name.unique())    
     
     sport_england_table = sport_england_table[sport_england_table["Matter_Name"].isin(matter_filter)]
 
-    query = st.text_input("Filter Narrative (Type In Lower Case)")
+    query = st.sidebar.text_input("Filter Narrative")
 
     if query:
-        mask = sport_england_table.map(lambda x: query in str(x).lower()).any(axis=1)
+        mask = sport_england_table.map(lambda x: query.lower() in str(x).lower()).any(axis=1)
         sport_england_table=sport_england_table[mask]
 
     gb = GridOptionsBuilder.from_dataframe(sport_england_table)
@@ -243,40 +238,35 @@ with tab1:
 
     gb.configure_column("ToBill Amount", 
                         type=["numericColumn","numberColumnFilter","customNumericFormat"], 
-                        valueFormatter="data['WIP'].toLocaleString('en-US', {style: 'currency', currency: '£', maximumFractionDigits:2})")
+                        valueFormatter="data['ToBill Amount'].toLocaleString('en-US', {style: 'currency', currency: 'GBP', maximumFractionDigits:2})")
     
     gridOptions = gb.build()
     grid_response = AgGrid(sport_england_table, gridOptions=gridOptions, columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS, enable_enterprise_modules=False)
 
-progress_text = "Please wait, generating files..."
+    columns = st.sidebar.multiselect("Columns:", sport_england_table.columns, default=list(sport_england_table.columns))
+
+    download = sport_england_table[columns]
+    sport_england_table.loc['Total'] = sport_england_table.sum(numeric_only=True)
+    #download = download.drop('Copy - Transaction Date', axis=1)
+    download.loc['Total'] = download.sum(numeric_only=True)
+
+    if not sport_england_table.empty:
+        download.loc[:, "ToBill Amount"] = "£" + download["ToBill Amount"].map('{:,.2f}'.format)
+
+    def to_excel(download) -> bytes:
+        output = io.BytesIO()
+        writer = pd.ExcelWriter(output, engine="xlsxwriter")
+        download.to_excel(writer, sheet_name="Sheet1")
+        writer.close()
+        processed_data = output.getvalue()
+        return processed_data
 
 
-columns = st.multiselect("Columns:", sport_england_table.columns)
-filter = st.radio("Choose by:", ("Inclusion", "Exclusion"))
+    st.download_button(
+        "Download Excel File",
+        data=to_excel(download),
+        file_name="FA Report .xlsx",
+        mime="application/vnd.ms-excel",
+    )
 
-if filter == "exclusion":
-    columns = [col for col in sport_england_table.columns if col not in columns]
-
-download = sport_england_table.loc['Total']= sport_england_table.sum(numeric_only=True)
-download = sport_england_table[columns]
-#download = download.drop('Copy - Transaction Date', axis=1)
-download.loc['Total']= download.sum(numeric_only=True)
-download
-
-def to_excel(download) -> bytes:
-    output = io.BytesIO()
-    writer = pd.ExcelWriter(output, engine="xlsxwriter")
-    download.to_excel(writer, sheet_name="Sheet1")
-    writer.close()
-    processed_data = output.getvalue()
-    return processed_data
-
-
-st.download_button(
-    "Download Excel File",
-    data=to_excel(download),
-    file_name="FA Report .xlsx",
-    mime="application/vnd.ms-excel",
-)
-
-#total after filters
+    #total after filters

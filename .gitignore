@@ -187,6 +187,8 @@ fabric.properties
 # Virtual Environment
 streamlitvenv
 streamlitvenv/
+env
+env/
 venv
 venv/
 
