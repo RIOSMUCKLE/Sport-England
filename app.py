@@ -249,6 +249,12 @@ with c:
     sport_england_table.loc['Total'] = sport_england_table.sum(numeric_only=True)
     #download = download.drop('Copy - Transaction Date', axis=1)
     download.loc['Total'] = download.sum(numeric_only=True)
+    download = download['Transaction Date'] = pd.to_datetime(download['Transaction Date']).dt.date
+    gb1 = GridOptionsBuilder.from_dataframe(sport_england_table)
+    gb1.configure_pagination(paginationAutoPageSize=True)
+    gb1.configure_default_column(editable=True, groupable=True)
+    gridOptions1 = gb1.build()
+    grid_response1 = AgGrid(download, gridOptions1=gridOptions1, columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS, enable_enterprise_modules=False)
 
     if not sport_england_table.empty:
         download.loc[:, "ToBill Amount"] = "£" + download["ToBill Amount"].map('{:,.2f}'.format)
